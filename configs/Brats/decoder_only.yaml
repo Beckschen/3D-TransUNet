@@ -28,4 +28,4 @@ max_num_epochs: 125 # used 8 cards as default
 task: Task500_BraTS2021
 network: 3d_fullres
 network_trainer: nnUNetTrainerV2_DDP
-hdfs_base: GeTU500Region_128128128_max2former_ms-432_decl3_d192_mds_mw1.0_disds_bs2x8_adamw_warmup10_lr3e-4_masklossv1_masking_hungarian20_mhsa32
+hdfs_base: GeTU500Region_3DTransUNet_decoder_only

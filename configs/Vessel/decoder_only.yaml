@@ -7,7 +7,6 @@ model_params: # variants
     max_dec_layers: 3 # number of Transformer decoder layers
     is_max_ms: True # using UNet multi-scale feature to update query in Transformer decoder
     max_ms_idxs: [-4, -3, -2] # which scale feature
-    # max_ss_idx: -2 # only turn on when using single-scale feature
     max_hidden_dim: 192
     mw: 0.0 # loss only applied onto Transformer decoder, istead of UNet decoder.
     is_max_ds: True # deep-supervision in Transformer decoder
@@ -30,4 +29,4 @@ max_num_epochs: 125 # used 8 cards as default
 task:  Task008_HepaticVessel
 network: 3d_fullres
 network_trainer: nnUNetTrainerV2_DDP
-hdfs_base: GeTU008_64192192_max2former_ms-432_decl3_d192_bT-d1_mds_mw1.0_bs2x8_adamw_warmup10_lr3e-4_masklossv1_masking_hungarian20_mhsa32_decoderonly
+hdfs_base: GeTU008_3DTransUNet_decoder_only

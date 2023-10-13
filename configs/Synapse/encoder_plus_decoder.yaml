@@ -28,4 +28,4 @@ max_num_epochs: 125 # used 8 cards as default
 task: Task201_Synapse8
 network: 3d_fullres
 network_trainer: nnUNetTrainerV2_DDP
-hdfs_base: GeTU201Synapse8_max2former_ms-432_decl3_d192_bT-d1_mds_mw1.0_disds_bs2x8_adamw_warmup10_lr3e-4_masklossv1_masking_hungarian20_mhsa32_l12_sgd_pretrain_ls_dls_partial
+hdfs_base: GeTU201Synapse8_3DTransUNet_encoder_plus_decoder
