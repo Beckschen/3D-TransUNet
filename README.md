@@ -1,10 +1,10 @@
 
 
-This is the official repository of our paper ["3D TransUNet: Advancing Medical Image Segmentation through Vision Transformers"](https://arxiv.org/abs/2310.07781). 
+This is the official repository of our project ["3D TransUNet: Advancing Medical Image Segmentation through Vision Transformers"](https://arxiv.org/abs/2310.07781). 
 
 ## 📰 News
 
-We will release the model very soon.
+We release the code.
 
 ## Usage
 
@@ -19,8 +19,6 @@ See scripts/train.sh
 ### Inference & Eval
 
 See scripts/inference.sh
-
-
 
 
 ## Acknowledgements
