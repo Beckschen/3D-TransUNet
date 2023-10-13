@@ -5,7 +5,7 @@ Segmentation through Vision Transformers"](https://arxiv.org/abs/2310.07781).
 
 ## 📰 News
 
-We will release the code & model very soon. 
+We will release the code & model late today. 
 
 
 ## Usage
