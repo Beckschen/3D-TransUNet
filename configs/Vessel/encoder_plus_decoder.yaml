@@ -1,0 +1,36 @@
+model: Generic_TransUNet_max_ppbp # model name
+model_params: # variants
+    is_max_bottleneck_transformer: True # TransUNet backbone
+    max_msda: ''
+    is_masked_attn: True  # turn on Transformer decoder
+    max_dec_layers: 3 # number of Transformer decoder layers
+    is_max_ms: True # using UNet multi-scale feature to update query in Transformer decoder
+    max_ms_idxs: [-4, -3, -2] # which scale feature
+    # max_ss_idx: -2 # only turn on when using single-scale feature
+    max_hidden_dim: 192
+    mw: 0.0 # loss only applied onto Transformer decoder, istead of UNet decoder.
+    is_max_ds: True # deep-supervision in Transformer decoder
+    is_masking: True # use masked-attention
+    is_max_hungarian: True # turn off hungarian matching
+    num_queries: 20
+    is_max_cls: True # turn on mask classification, along with hungarian matching
+    is_mhsa_float32: True # turn on float32 (rather than fp16) incase NAN in softmax
+
+    vit_depth: 12 # number of Transformer layer in TransUNet
+    is_vit_pretrain: True
+    vit_layer_scale: True
+
+crop_size: [64,192,192] # input patch size
+max_loss_cal: 'v1'
+batch_size: 4
+disable_ds: False
+initial_lr: 3e-4
+optim_name: adamw
+lrschedule: warmup_cosine
+resume: 'auto'
+warmup_epochs: 10
+max_num_epochs: 125 # used 8 cards as default
+task:  Task008_HepaticVessel
+network: 3d_fullres
+network_trainer: nnUNetTrainerV2_DDP
+hdfs_base: GeTU008_64192192_max2former_ms-432_decl3_d192_bT-d1_mds_mw1.0_bs2x8_adamw_warmup10_lr3e-4_masklossv1_masking_hungarian20_mhsa32_l12_pretrain_ls
