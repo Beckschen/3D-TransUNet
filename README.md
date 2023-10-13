@@ -10,7 +10,7 @@ We will release the model very soon.
 
 ### Installation
 
-See scripts/install.sh for installation. See [nnUNet](https://github.com/MIC-DKFZ/nnUNet) for self-configuring data preprocession.
+See scripts/install.sh for installation. See [nnUNet](https://github.com/MIC-DKFZ/nnUNet) for self-configuring data preprocessing.
 
 ### Train
 
