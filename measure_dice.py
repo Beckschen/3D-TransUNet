@@ -1,11 +1,11 @@
+import argparse
+import yaml
 import os
 import numpy as np
 import SimpleITK as sitk
+
 from medpy import metric
 from tqdm import tqdm
-
-import argparse
-import yaml
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='', type=str, metavar='FILE', help='YAML config file specifying default arguments')
@@ -72,7 +72,6 @@ def each_cases_metric(gt, pred, voxel_spacing):
         for cls in range(1, classes_num):
             tmp = cal_metric(pred==cls, gt==cls, voxel_spacing)
             class_wise_metric[cls-1, ...] = tmp
-    # print(class_wise_metric)
     return class_wise_metric
 
 network, task, network_trainer, hdfs_base = cfg['network'], cfg['task'], cfg['network_trainer'], cfg['hdfs_base']
@@ -128,7 +127,6 @@ for ind, case in enumerate(tqdm(os.listdir(pred_dir if pred_dirs is None else pr
     per_result = each_cases_metric(gt_array, pred_array, voxel_spacing)
     all_results.append(per_result)
     r_ind += 1
-
 
 
 print(f'num examples: {len(all_results)}')
