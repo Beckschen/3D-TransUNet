@@ -49,7 +49,6 @@ parser.add_argument("--save_npz", default=False, action="store_true")
 parser.add_argument("--disable_split", default=False, action="store_true", help='just use raw_data_dir, do not use split!')
 parser.add_argument("--model_latest", default=False, action="store_true", help='')
 parser.add_argument("--model_final", default=False, action="store_true", help='')
-
 parser.add_argument("--mixed_precision", default=True, type=bool, help='')
 parser.add_argument("--measure_param_flops", default=False, action="store_true", help='')
 
@@ -99,15 +98,13 @@ fold_name = args.fold if isinstance(args.fold, str) and args.fold.startswith('al
 output_folder =  output_folder_name + '/' + fold_name
 plans_path = os.path.join(output_folder_name, 'plans.pkl')
 shutil.copy(plans_file, plans_path)
-#print(plans_file)
-#exit()
+
 val_keys = None
 if not args.disable_split:
     splits_file = os.path.join(dataset_directory, "splits_final.pkl")
     splits = load_pickle(splits_file)
     if not args.fold.startswith('all'):
         assert int(args.fold) < len(splits)
-        # tr_keys = splits[int(args.fold)]['train']
         val_keys = splits[int(args.fold)]['val']
         if isinstance(val_keys, np.ndarray):
             val_keys = val_keys.tolist()
@@ -124,15 +121,14 @@ elif os.path.exists(output_folder + '/' + 'model_final_checkpoint.model') and no
     modelfile = output_folder + '/' + 'model_final_checkpoint.model'
 else:
     print("load model_latest.model")
-    modelfile = output_folder + '/' + 'model_latest.model'# "/data/DataSet_all/Multi-Site-NPC/Jinghu/all_nii/model_final_checkpoint.model"
-
+    modelfile = output_folder + '/' + 'model_latest.model'
 
 info = pickle.load(open(planfile, "rb"))
 plan_data = {}
 plan_data["plans"] = info
 
 resolution_index = 1
-if cfg['task'].find('500') != -1:
+if cfg['task'].find('500') != -1: # multiphase task e.g, Brats
     resolution_index = 0
 
 num_classes = plan_data['plans']['num_classes']
@@ -144,11 +140,11 @@ else:
     num_classes += 1 # add background
 
 base_num_features = plan_data['plans']['base_num_features']
-if '005' in plans_file or  '004' in plans_file or '001' in plans_file or '002' in plans_file :
+if '005' in plans_file or  '004' in plans_file or '001' in plans_file or '002' in plans_file : # multiphase task e.g, Brats
     resolution_index = 0
 
 patch_size = plan_data['plans']['plans_per_stage'][resolution_index]['patch_size']
-patch_size = args.crop_size if args.crop_size is not None else patch_size # DEBUG
+patch_size = args.crop_size if args.crop_size is not None else patch_size
 
 num_input_channels = plan_data['plans']['num_modalities']
 conv_per_stage = plan_data['plans']['conv_per_stage'] if "conv_per_stage" in plan_data['plans'].keys() else 2
@@ -169,7 +165,7 @@ try:
     clip_max = plan_data['plans']['dataset_properties']['intensityproperties'][0]['percentile_99_5']
 except:
     if cfg['task'].find('500') != -1 or '005' in task or '001' in task:
-        mean, std, clip_min, clip_max = 0, 1, -9999, 9999 # do nothing
+        mean, std, clip_min, clip_max = 0, 1, -9999, 9999
     else:
         mean, std, clip_min, clip_max = None, None, -9999, 9999
 
