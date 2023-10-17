@@ -1,30 +1,26 @@
-from glob import glob
-import SimpleITK as sitk
-import numpy as np
-from scipy.ndimage.filters import gaussian_filter
-from typing import Tuple
-import torch
-import torch.nn as nn
-
-import torch.nn.functional as F
-
-
-from tqdm import tqdm
-
-
-from nn_transunet.default_configuration import get_default_configuration
-from nn_transunet.configuration import default_plans_identifier
 import argparse
 import yaml
+import shutil
+import SimpleITK as sitk
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import sys
 
+from glob import glob
+from scipy.ndimage.filters import gaussian_filter
+from typing import Tuple
+from tqdm import tqdm
+from nn_transunet.default_configuration import get_default_configuration
+from nn_transunet.configuration import default_plans_identifier
 from nn_transunet.networks.nnunet_model import Generic_UNet
 from nn_transunet.utils.dist_utils import download_from_hdfs
-import shutil
 from batchgenerators.utilities.file_and_folder_operations import *
 from collections import OrderedDict
 from nn_transunet.networks.neural_network import no_op
 from torch.cuda.amp import autocast
-import sys
+
 
 from nn_transunet.networks.transunet3d_model import InitWeights_He
 
@@ -41,7 +37,6 @@ def get_flops(model, test_data):
 """
 can also inference for Generic_UNet with:
 python3 -m torch.distributed.launch --master_port=4321 --nproc_per_node=8 run_training_DDP.py --config='./configs/Generic_UNet_DDP_bs2x8_lr0.08.yaml' --fold=0 -val --val_final
-
 """
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='', type=str, metavar='FILE',
@@ -59,14 +54,11 @@ parser.add_argument("--mixed_precision", default=True, type=bool, help='')
 parser.add_argument("--measure_param_flops", default=False, action="store_true", help='')
 
 ##################### the args from train script #########################################
-
 parser.add_argument("--local_rank", type=int, default=0)
-parser.add_argument('--mask_ratio', default=0.75, type=float)
 parser.add_argument('--loss_name', default='', type=str)
 parser.add_argument('--plan_update', default='', type=str)
 parser.add_argument('--crop_size', nargs='+', type=int, default=None,
                     help='input to network')
-parser.add_argument('--reclip', nargs='+', type=int)
 parser.add_argument("--pretrained", default=False, action="store_true", help="")
 parser.add_argument("--disable_decoder", default=False, action="store_true", help="disable decoder of mae network")
 parser.add_argument("--model_params", default={})
@@ -74,14 +66,12 @@ parser.add_argument('--layer_decay', default=1.0, type=float, help="layer-wise d
 parser.add_argument('--drop_path', type=float, default=0.0, metavar='PCT',
                     help='Drop path rate (default: 0.1), drop_path=0 for MAE pretrain')
 parser.add_argument("--find_zero_weight_decay", default=False, action="store_true", help="")
-parser.add_argument('--n_class', default=17, type=int, help="17 for WORD including background")
+parser.add_argument('--n_class', default=17, type=int, help="")
 parser.add_argument('--deep_supervision_scales', nargs='+', type=int, default=[], help='')
 parser.add_argument("--fix_ds_net_numpool", default=False, action="store_true", help="")
 parser.add_argument("--num_ds", default=None, type=int, help="")
 parser.add_argument("--is_sigmoid", default=False, action="store_true", help="")
 parser.add_argument("--num_examples", type=int, help="")
-
-##################### the args from train script #########################################
 
 args, remaining = parser.parse_known_args() # expect return 'remaining' standing for the namspace from launch? but not...
 model_params = {}
@@ -123,16 +113,7 @@ if not args.disable_split:
             val_keys = val_keys.tolist()
 
 
-if not os.path.exists(output_folder):
-    hdfs_folder=output_folder_name.replace("/opt/tiger/project/data/nnUNet_trained_models/UNet_IN_NANFang/", "")
-    hdfs_path="hdfs://haruna/home/byte_arnold_hl_vc/user/jienengchen/projects/transunet/nnunet/snapshots/" + hdfs_folder + "/" + fold_name
-    # assert 1==2, (output_folder_name, hdfs_path)
-    flag = download_from_hdfs(hdfs_path, output_folder_name, raise_exception=False) # return False if hdfs_path not exist else return path
-    # assert flag, "hdfs regarding fold not exist"
-
-else:
-    print("output folder for snapshot loading exists: ", output_folder)
-
+print("output folder for snapshot loading exists: ", output_folder)
 prefix = "version5"
 planfile = plans_path
 if os.path.exists(output_folder + '/' + 'model_best.model') and not args.model_latest and not args.model_final:
@@ -149,9 +130,6 @@ else:
 info = pickle.load(open(planfile, "rb"))
 plan_data = {}
 plan_data["plans"] = info
-# print(plan_data)
-# assert 1==2, plan_data["plans"]['modalities'] # {0: 'T1', 1: 'T1ce', 2: 'T2', 3: 'FLAIR'}
-# assert 1==2, (plan_data["plans"]['original_spacings'], plan_data["plans"]['normalization_schemes'])
 
 resolution_index = 1
 if cfg['task'].find('500') != -1:
@@ -184,8 +162,6 @@ pool_op_kernel_sizes = plan_data['plans']['plans_per_stage'][resolution_index]['
 conv_kernel_sizes = plan_data['plans']['plans_per_stage'][resolution_index]['conv_kernel_sizes']
 current_spacing = plan_data['plans']['plans_per_stage'][resolution_index]['current_spacing']
 
-
-# 4 lines should be commented 
 try:
     mean = plan_data['plans']['dataset_properties']['intensityproperties'][0]['mean']
     std = plan_data['plans']['dataset_properties']['intensityproperties'][0]['sd']
@@ -208,9 +184,8 @@ if cfg['model'].startswith('Generic'):
         net = Generic_TransUNet_max_ppbp(num_input_channels, base_num_features, num_classes, len(pool_op_kernel_sizes), conv_per_stage, 2,
                    nn.Conv3d, nn.InstanceNorm3d, norm_op_kwargs, nn.Dropout3d,
                    dropout_op_kwargs, net_nonlin, net_nonlin_kwargs, not args.disable_ds, False, lambda x: x,
-                   # dropout_op_kwargs, net_nonlin, net_nonlin_kwargs, False, False, lambda x: x,
-                   InitWeights_He(1e-2), pool_op_kernel_sizes, conv_kernel_sizes, False, True, # True,
-                   convolutional_upsampling= False if ('is_fam' in model_params.keys() and model_params['is_fam']) else True, #  default True,    
+                   InitWeights_He(1e-2), pool_op_kernel_sizes, conv_kernel_sizes, False, True, 
+                    convolutional_upsampling= True,    
                     patch_size=patch_size, **model_params)
     elif cfg['model'] == 'Generic_UNet':
         net = Generic_UNet(num_input_channels, base_num_features, num_classes, len(pool_op_kernel_sizes), conv_per_stage, 2,
@@ -225,17 +200,13 @@ else:
     print("Note implemented for cfg['model']")
     raise NotImplementedError
 total = sum([param.nelement() for param in net.parameters()])
-# print(net)
-# print('model %s  + Number of Network Params: %.2f(e6)' % (cfg['model'], total / 1e6))
 net.cuda()
 
 
 
 if args.measure_param_flops:
-    
     with torch.no_grad():
         test_data = torch.zeros((1, 1, patch_size[0], patch_size[1], patch_size[2])).cuda()
-
         msg = get_flops(net, test_data) # same flops results with detectron, but count params as well.
         print(args.config, msg)
     sys.exit(0)
@@ -244,7 +215,6 @@ if args.measure_param_flops:
 checkpoint = torch.load(modelfile)
 
 print("load epoch", checkpoint['epoch'])
-# weights = checkpoint['state_dict']
 new_state_dict = OrderedDict()
 curr_state_dict_keys = list(net.state_dict().keys())
 for k, value in checkpoint['state_dict'].items():
@@ -253,7 +223,7 @@ for k, value in checkpoint['state_dict'].items():
         key = key[7:]
     new_state_dict[key] = value
 
-net.load_state_dict(new_state_dict, strict=False) # DDP and nonDDP fuck you!
+net.load_state_dict(new_state_dict, strict=False) 
 cur_dict = net.state_dict()
 print("missing keys of pretrained", [k for k in new_state_dict.keys() if k not in cur_dict.keys()])
 print("extra keys of pretrained", [k for k in cur_dict.keys() if k not in new_state_dict.keys()])
@@ -275,7 +245,6 @@ def _write_arr(arr, path, info=None):
 
 
 def get_do_separate_z(spacing, anisotropy_threshold=2):
-    # do_separate_z = (np.max(spacing) / np.min(spacing)) > anisotropy_threshold
     do_separate_z = spacing[-1] > anisotropy_threshold
     return do_separate_z
 
@@ -285,16 +254,12 @@ def _compute_steps_for_sliding_window(patch_size: Tuple[int, ...],
                                       step_size: float) -> List[List[int]]:
     assert [i >= j for i, j in zip(image_size, patch_size)], "image size must be as large or larger than patch_size"
     assert 0 < step_size <= 1, 'step_size must be larger than 0 and smaller or equal to 1'
-
-    # our step width is patch_size*step_size at most, but can be narrower. For example if we have image size of
-    # 110, patch size of 32 and step_size of 0.5, then we want to make 4 steps starting at coordinate 0, 27, 55, 78
     target_step_sizes_in_voxels = [i * step_size for i in patch_size]
 
     num_steps = [int(np.ceil((i - k) / j)) + 1 for i, j, k in zip(image_size, target_step_sizes_in_voxels, patch_size)]
 
     steps = []
     for dim in range(len(patch_size)):
-        # the highest step value for this dimension is
         max_step_value = image_size[dim] - patch_size[dim]
         if num_steps[dim] > 1:
             actual_step_size = max_step_value / (num_steps[dim] - 1)
@@ -324,24 +289,6 @@ def _get_gaussian(patch_size, sigma_scale=1. / 8) -> np.ndarray:
 
 gaussian_mask = torch.from_numpy(_get_gaussian(patch_size)[np.newaxis, np.newaxis]).cuda().half().clamp_min_(1e-4)
 
-def viz_data(img_patch, pred_patch):
-    """input (2, 1, d, h, w) """
-    import SimpleITK as sitk
-    output_folder = '/opt/tiger/project/data/nnUNet_trained_models/UNet_IN_NANFang/Task801_WORD/nnUNetTrainerV2_DDP__nnUNetPlansv2.1/3d_fullres_transunet3d_disable_ds_lr0.08_epo250_1212_debug/fold_0'
-    viz_output_folder = os.path.join(output_folder, 'viz')
-    os.makedirs(viz_output_folder, exist_ok=True)
-    print("viz_output_folder", viz_output_folder)
-    img_patch = img_patch.cpu().numpy()[0][0] * 500
-    data_sitk = sitk.GetImageFromArray(img_patch.astype(np.uint8))
-    if torch.sum(pred_patch[0,:,0,0,0]) != 1: 
-        pred_patch = (torch.argmax(torch.softmax(pred_patch, dim=1), dim=1)).cpu().numpy()[0]
-    else:
-        pred_patch = (torch.argmax(pred_patch, dim=1)).cpu().numpy()[0]
-    pred_sitk = sitk.GetImageFromArray(pred_patch.astype(np.uint8))
-    sitk.WriteImage(data_sitk, os.path.join(viz_output_folder, '002_img_infer.nii.gz'))
-    sitk.WriteImage(pred_sitk, os.path.join(viz_output_folder, '002_pred_infer.nii.gz'))
-
-    assert 1==2, "stop!"
 
 def predict(arr):
     if args.num_ds is not None:
@@ -351,17 +298,12 @@ def predict(arr):
 
     cnt_map = torch.zeros_like(prob_map)
 
-    if 'reclip' in cfg.keys():
-        arr_clip = np.clip(arr, cfg['reclip'][0], cfg['reclip'][1])  
-    else:
-        arr_clip = np.clip(arr, clip_min, clip_max)
+    arr_clip = np.clip(arr, clip_min, clip_max)
 
-    # arr_clip = np.clip(arr, clip_min, clip_max)
 
     if mean is None and std is None:
-        raw_norm = (arr_clip - arr_clip.mean()) / (arr_clip.std()+ 1e-8) # BUG for transunet3D 
-
-    else: # mean=0, std=1 if '500'
+        raw_norm = (arr_clip - arr_clip.mean()) / (arr_clip.std()+ 1e-8) D 
+    else:
         raw_norm = (arr_clip - mean) / std
     
     step_size = 0.5 if args.config.find('500Region') != -1 or  task.find('005') != -1  or task.find('001')  != -1 else 0.7
@@ -404,12 +346,9 @@ def predict(arr):
                         mask_pred = mask_pred.sigmoid()
                         seg_pro = torch.einsum("bqc,bqdhw->bcdhw", mask_cls, mask_pred)
                         _pred = seg_pro
-                        # assert 1==2, (seg_pro.min(), seg_pro.max())
 
                         if args.config.find('500Region') != -1 or  task.find('005') != -1  or task.find('001')  != -1:
-                            # seg_pro = seg_pro.sigmoid() 
                             _pred = seg_pro
-                            # _pred = seg_pro * gaussian_mask
                         else:
                             _pred = seg_pro * gaussian_mask
 
@@ -434,7 +373,6 @@ def predict(arr):
                     else:
 
                         if args.is_sigmoid:
-                            # TODO: implement gaussian_mask, remember add gaussian_mask to cnt_map
                             _pred = seg_pro.sigmoid()
                         elif torch.sum(seg_pro[0,:,0,0,0]) != 1: 
                             seg_pro = torch.softmax(seg_pro, dim=1)
@@ -445,7 +383,6 @@ def predict(arr):
 
 
     print("before devision", prob_map.max(), prob_map.min(), cnt_map.min())
-
     if args.config.find('500Region') != -1 or  task.find('005') != -1  or task.find('001')  != -1:
         prob_map /= cnt_map
     print("after devision", prob_map.max(), prob_map.min())
@@ -482,14 +419,10 @@ def resample_image_to_ref(image, ref, interp=sitk.sitkNearestNeighbor, pad_value
 
 def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
     """if use nii, can crop and preprocess given a list of path; already check the npy is the same with f(nii)"""
-    if mode=='npy': # preferred, can we directly predict on (128, 128, 128)
+    if mode=='npy': # preferred
         rawf_npy = rawf.replace('nnUNet_raw_data', 'nnUNet_preprocessed').replace('imagesTr', 'nnUNetData_plans_v2.1_stage0').replace('_0000.nii.gz', '.npy')
         assert os.path.exists(rawf_npy) # already preprocessed!
         img_arr = np.load(rawf_npy)[:4]
-        # (2.5859985, -3.1273594, 3.5554603e-08, 0.6598192)
-        # test = img_arr[0] * 255
-        # data_sitk = sitk.GetImageFromArray(test.astype(np.uint8))
-        # sitk.WriteImage(data_sitk, os.path.basename(rawf))
     else:
         # data_files: a list of path
         # nnunet.inference.predict will call 
@@ -508,23 +441,14 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
         preprocessor = GenericPreprocessor(normalization_schemes, use_mask_for_norm, transpose_forward, intensity_properties)
         data, _, crop_prep_properties = preprocessor.resample_and_normalize(data, target_spacing, crop_properties, seg, force_separate_z=force_separate_z)
         img_arr = data
-
-
-   #  img_arr = torch.from_numpy(img_arr).cuda().unsqueeze(0)
-
-    # assert 1==2, (img_arr.max(), img_arr.min()) #  (tensor(10.8465, device='cuda:0'), tensor(-4.6159, device='cuda:0'))
     pad_flag = 0
     padzyx = np.clip(np.array(patch_size) - np.array(img_arr.shape)[-3:], 0, 1000) # clip the shape..
-    print("img_arr before pad ", img_arr.shape)
-
     if np.any(padzyx > 0):
         pad_flag = 1
         pad_left = padzyx // 2
         pad_right = padzyx - padzyx // 2
         img_arr = np.pad(img_arr, ((0, 0), (pad_left[0], pad_right[0]), (pad_left[1], pad_right[1]), (pad_left[2], pad_right[2])))
     
-    # pad_flag=0 for brats
-    print("img_arr ", img_arr.shape)
     # PREDICT!
     if args.mixed_precision:
         context = autocast
@@ -535,9 +459,6 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
         with torch.no_grad():
             prob_map = predict(img_arr)
 
-    # assert  torch.argmax(prob_map[0], dim=0).sum() > 0, "case {} | prob argmax should > 0".format(rawf)
-
-    print("pad_flag", pad_flag)
     if pad_flag:
         prob_map = prob_map[:, :,
                    pad_left[0]: img_arr[0].shape[0] - pad_right[0],
@@ -551,8 +472,7 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
     else:
         uid = rawf.split("/")[-1].replace('_0000', '')
         for i in range(num_input_channels):
-            uid = uid.replace('_000'+str(i), '')#.replace(".nii.gz", "_pred.nii.gz")
-       # uid = rawf.split("/")[-1].replace('_0000', '')
+            uid = uid.replace('_000'+str(i), '')
         save_dir = os.path.join(save_path, uid)
 
     if args.save_npz:
@@ -561,7 +481,7 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
         npz_name = rawf.split("/")[-1].replace(".nii.gz", ".npz")
         np.savez_compressed(os.path.join(save_npz_dir, npz_name), softmax=prob_map_interp.squeeze(0))
 
-    # TODO, convert from region to normal label
+    # convert from region to normal label
     if args.config.find('500Region') != -1 or  task.find('005') != -1  or task.find('001')  != -1:
         thres = float(args.model_params['max_infer'].split('_')[-1]) if 'max_infer' in args.model_params.keys() and args.model_params['max_infer'].startswith('thres') else 0.5
         segmentation_hot = (prob_map > thres).float().squeeze(0).cpu().numpy() # (3, D, H, W)
@@ -583,12 +503,8 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
              full_segm[bbox[0][0]:bbox[0][1], bbox[1][0]:bbox[1][1], bbox[2][0]:bbox[2][1]] = segmentation
         segmentation = full_segm
 
-    #assert segmentation.sum() > 0, "should be segmentation.sum() > 0"
     del prob_map_interp
     pred_sitk = sitk.GetImageFromArray(segmentation.astype(np.uint8))
-    # pred_sitk.CopyInformation(sitk_raw) # if spacing == 1
-    # pred_sitk = resample_image_to_ref(pred_sitk, sitk_raw)
-
     sitk.WriteImage(pred_sitk, save_dir)
 
 
@@ -694,12 +610,6 @@ def Inference3D(rawf, save_path=None):
             sitk.WriteImage(pred_sitk, save_dir)
         return
 
-    #if torch.argmax(prob_map[0], dim=0).sum() <= 0:
-    #    print(torch.argmax(prob_map[0], dim=0).sum())
-    #assert  torch.argmax(prob_map[0], dim=0).sum() > 0, "case {} | prob argmax should > 0".format(rawf)
-
-
-
     if pad_flag:
         prob_map = prob_map[:, :,
                    pad_left[0]: img_arr.shape[0] - pad_right[0],
@@ -740,7 +650,7 @@ def Inference3D(rawf, save_path=None):
         save_dir = rawf.replace(".nii.gz", "_pred.nii.gz")
     else:
         #change name to msd format
-        uid = rawf.split("/")[-1].replace('_0000', '')#.replace(".nii.gz", "_pred.nii.gz")
+        uid = rawf.split("/")[-1].replace('_0000', '')
         save_dir = os.path.join(save_path, uid)
 
     if args.save_npz:
@@ -750,7 +660,6 @@ def Inference3D(rawf, save_path=None):
         np.savez_compressed(os.path.join(save_npz_dir, npz_name), softmax=prob_map_interp.squeeze(0))
     segmentation = np.argmax(prob_map_interp.squeeze(0), axis=0)
 
-    #assert segmentation.sum() > 0, "should be segmentation.sum() > 0"
     del prob_map_interp
     pred_sitk = sitk.GetImageFromArray(segmentation.astype(np.uint8))
     pred_sitk.CopyInformation(sitk_raw)
@@ -771,17 +680,14 @@ os.makedirs(args.save_folder, exist_ok=True)
 
 rawf = sorted(glob(raw_data_dir+"/*.nii.gz")) # sorted(glob("/data/DataSet_all/Multi-Site-NPC/Jinghu/all_nii/MR/*/*.nii.gz"))
 if val_keys is not None:
-    print("use val_keys")
     valid_rawf = [i for i in rawf if os.path.basename(i).replace('.nii.gz', '').replace('_0000', '') in val_keys]
 else:
-    print("use rawf")
     valid_rawf = rawf
 
+
 for i, rawf in enumerate(tqdm(valid_rawf)):
-#for i in valid_rawf:
     if task.find('500') != -1 or  task.find('005') != -1  or task.find('001')  != -1:
         Inference3D_multiphase(rawf, args.save_folder)
-
     else:
         Inference3D(rawf, args.save_folder)
     
