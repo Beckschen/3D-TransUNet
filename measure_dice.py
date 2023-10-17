@@ -8,8 +8,7 @@ import argparse
 import yaml
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', default='', type=str, metavar='FILE',
-                    help='YAML config file specifying default arguments')
+parser.add_argument('--config', default='', type=str, metavar='FILE', help='YAML config file specifying default arguments')
 parser.add_argument("--eval_mode", default='Val', type=str,)
 parser.add_argument("--fold", default=0, help='0, 1, ..., 5 or \'all\'')
 parser.add_argument("--raw_data_dir", default='')
@@ -18,7 +17,7 @@ parser.add_argument("--disable_split", default=False, action="store_true", help=
 parser.add_argument("--which_ds", default=None, type=int, help="")
 parser.add_argument("--num_classes", default=None, type=int, help="")
 parser.add_argument("--evaluate_regions", default=False, action="store_true", help="only validate for 500Region")
-args, remaining = parser.parse_known_args() # expect return 'remaining' standing for the namspace from launch? but not...
+args, remaining = parser.parse_known_args()
 
 if args.config:
     with open(args.config, 'r') as f:
@@ -39,7 +38,6 @@ def create_region_from_mask(mask, join_labels: tuple):
 
 def cal_metric(gt, pred, voxel_spacing):
     if pred.sum() > 0 and gt.sum() > 0:
-        # assert 1==2, (pred.shape, pred.shape)
         dice = metric.binary.dc(pred, gt)
         # hd95 = metric.binary.hd95(pred, gt, voxelspacing=voxel_spacing)
         # jc = metric.jc(pred, gt)
@@ -77,28 +75,22 @@ def each_cases_metric(gt, pred, voxel_spacing):
     # print(class_wise_metric)
     return class_wise_metric
 
-
-
 network, task, network_trainer, hdfs_base = cfg['network'], cfg['task'], cfg['network_trainer'], cfg['hdfs_base']
 
 fold_name = args.fold if args.fold.startswith('all') else 'fold_'+str(args.fold)
-all_results = [] # np.zeros((20,16,1))
-
-
+all_results = []
 
 label_dir = os.getenv('nnUNet_preprocessed')+"/"+task+"/gt_segmentations/" # "/home/SENSETIME/luoxiangde.vendor/Projects/ABDSeg/data/ABDSeg/data/labelsTs/"
 raw_dir = os.getenv('nnUNet_raw_data_base') +"/nnUNet_raw_data/"+task+"/"
 
 
 if args.pred_dir is None:
-    # pred_dir = "/opt/tiger/project/fold_0/validation_raw_postprocessed/" # "/data/nnUNetFrame/DATASET/nnUNet_trained_models/ResUNet/2d/Task003_ABDSeg_WeakLab_EM_IDM/nnUNetTrainer__nnUNetPlansv2.1/all/Predictions_final/"
     if args.raw_data_dir:
         pred_dir = os.getenv('nnUNet_raw_data_base')+"/nnUNet_inference/"+task+"/"+cfg['hdfs_base']+'/'+fold_name+'/'+os.path.basename(args.raw_data_dir)+"/"
     else:
         pred_dir = os.getenv('nnUNet_raw_data_base')+"/nnUNet_inference/"+task+"/"+cfg['hdfs_base']+"/" + fold_name+"/"
 else:
     pred_dir = args.pred_dir
-# assert 1==2, (pred_dir, os.path.exists(pred_dir))
 
 if args.which_ds is not None:
     pred_dir = pred_dir + 'ds_' + str(args.which_ds)+'/'
@@ -121,27 +113,19 @@ for ind, case in enumerate(tqdm(os.listdir(pred_dir if pred_dirs is None else pr
     assert os.path.exists(gt_path), gt_path
     gt_itk = sitk.ReadImage(gt_path)
     voxel_spacing = (gt_itk.GetSpacing()[2], gt_itk.GetSpacing()[0], gt_itk.GetSpacing()[1])
-    gt_array = sitk.GetArrayFromImage(gt_itk) # (200, 512, 512)
+    gt_array = sitk.GetArrayFromImage(gt_itk)
     if pred_dirs is not None:
         prob_maps = [
-            np.load(os.path.join(pd, case.replace(".nii.gz",
-                                                  ".npz")))['softmax']
+            np.load(os.path.join(pd, case.replace(".nii.gz", ".npz")))['softmax']
             for pd in pred_dirs
         ]
         pred_array = np.argmax(np.mean(prob_maps, axis=0), axis=0)
         pred_array = pred_array.astype(gt_array.dtype)
     else:
         pred_itk = sitk.ReadImage(pred_dir+case)
-        pred_array = sitk.GetArrayFromImage(pred_itk) # (200, 512, 512)
+        pred_array = sitk.GetArrayFromImage(pred_itk) 
 
-
-    if args.config.find('850') != -1: # word
-        pred_array[:, :, 0:256][pred_array[:, :, 0:256] == 15] = 16
-        pred_array[:, :, 0:256][pred_array[:, :, 0:256] == 16] = 16
-        pred_array[:, :, 256:][pred_array[:, :, 256:] == 15] = 15
-        pred_array[:, :, 256:][pred_array[:, :, 256:] == 16] = 15
     per_result = each_cases_metric(gt_array, pred_array, voxel_spacing)
-    # print("case {} per_result {}".format(case, per_result))
     all_results.append(per_result)
     r_ind += 1
 
@@ -157,7 +141,6 @@ print(
             os.path.basename(args.raw_data_dir),
             np.mean(all_results)
             ))
-# print(( *np.mean(all_results, axis=0).squeeze().tolist(), np.mean(all_results)))
 num_classes = max([val.shape[0] for val in all_results])
 per_class_results = [
         np.mean([

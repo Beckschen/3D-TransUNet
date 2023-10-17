@@ -74,9 +74,6 @@ def get_default_configuration(network, task, network_trainer, plans_identifier=d
     trainer_class = network_trainer_dict[network_trainer]
     # trainer_class = nnUNetTrainer
     # trainer_class = recursive_find_python_class([join(*search_in)], network_trainer, current_module=base_module)
-
-    # assert 1==2, (network_training_output_dir, network, task, network_trainer + "__" + plans_identifier)
-
     output_folder_name = join(network_training_output_dir, task, network_trainer + "__" + plans_identifier, hdfs_base)
 
     print("###############################################")
