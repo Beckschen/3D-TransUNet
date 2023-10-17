@@ -8,18 +8,15 @@ import torch
 from torch import nn, Tensor
 from torch.nn import functional as F
 
-from detectron2.config import configurable
-from detectron2.layers import Conv2d
+from fvcore.common.registry import Registry
 
 from .position_encoding import PositionEmbeddingSine
 from torch.cuda.amp import autocast
 
+from nn_transunet.networks.d2util import configurable, Conv2d
 from nn_transunet.networks.vit_modeling import LayerScale
 
 TRANSFORMER_DECODER_REGISTRY = Registry("TRANSFORMER_MODULE")
-TRANSFORMER_DECODER_REGISTRY.__doc__ = """
-Registry for transformer module in MaskFormer.
-"""
 
 class SelfAttentionLayer(nn.Module):
 
