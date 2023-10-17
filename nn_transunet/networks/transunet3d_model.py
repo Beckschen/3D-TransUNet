@@ -2,21 +2,20 @@
 # Modified from nnUNet
 
 
-from copy import deepcopy
 
-import torch.nn.functional as F
-from torch import nn
 import torch
 import numpy as np
+import torch.nn.functional
+import torch.nn.functional as F
+
+from copy import deepcopy
+from torch import nn
+from torch.cuda.amp import autocast
+from scipy.optimize import linear_sum_assignment
 
 from ..networks.neural_network import SegmentationNetwork
-import torch.nn.functional
 from .vit_modeling import Transformer
 from .vit_modeling import CONFIGS as CONFIGS_ViT
-
-# from dcn_v2 import DCN as dcn_v2
-from scipy.optimize import linear_sum_assignment
-from torch.cuda.amp import autocast
 
 softmax_helper = lambda x: F.softmax(x, 1)
 
@@ -435,7 +434,6 @@ class Generic_TransUNet_max_ppbp(SegmentationNetwork):
             config_vit.hidden_size = vit_hidden_size # 768
             config_vit.transformer.mlp_dim = vit_mlp_dim # 3072
             config_vit.transformer.num_heads = vit_num_heads # 12
-            # final_num_features=32, output_features=320
             self.conv_more = nn.Conv3d(config_vit.hidden_size, output_features, 1)
             num_pool_per_axis = np.prod(np.array(pool_op_kernel_sizes), axis=0)
             num_pool_per_axis = np.log2(num_pool_per_axis).astype(np.uint8)
@@ -500,20 +498,7 @@ class Generic_TransUNet_max_ppbp(SegmentationNetwork):
                 cfg["dropout"], cfg["enc_layers"], cfg["deep_supervision"] = 0.1, 0, False
                 self.predictor = StandardTransformerDecoder(in_channels=max_hidden_dim, mask_classification=is_max_cls, **cfg)
 
-
-
-        
     def forward(self, x):
-        """
-        input x      torch.Size([2, 1, 48, 192, 192])
-        layer 0 feat torch.Size([2, 32, 48, 192, 192])
-        layer 1 feat torch.Size([2, 64, 48, 96, 96])
-        layer 2 feat torch.Size([2, 128, 24, 48, 48])
-        layer 3 feat torch.Size([2, 256, 12, 24, 24])
-        layer 4 feat torch.Size([2, 320, 6, 12, 12])
-        conv_blocks_context torch.Size([2, 320, 6, 6, 6]) - [2, 320, 4, 5, 5]
-        seg_outputs [torch.Size([2, 9, 6, 12, 12]), torch.Size([2, 9, 12, 24, 24]), torch.Size([2, 9, 24, 48, 48]), torch.Size([2, 9, 48, 96, 96]), torch.Size([2, 9, 48, 192, 192])]
-        """
         skips = []
         seg_outputs = []
         for d in range(len(self.conv_blocks_context) - 1):
@@ -532,7 +517,6 @@ class Generic_TransUNet_max_ppbp(SegmentationNetwork):
         ds_feats = [] # obtain multi-scale feature
         ds_feats.append(x)
         for u in range(len(self.tu)):
- 
             if  u<len(self.tu)-1 and isinstance(self.is_fam, str) and self.is_fam.startswith('fam_down'):
                 skip_down = nn.Upsample(size=x.shape[2:])(skips[-(u + 1)]) if x.shape[2:]!=skips[-(u + 1)].shape[2:] else skips[-(u + 1)]
                 x_align = self.fams[u](x, x_l=skip_down)
@@ -552,24 +536,15 @@ class Generic_TransUNet_max_ppbp(SegmentationNetwork):
         ######### Max PPB+ #########
         if self.is_max:
             if self.is_max_ms: # is_max_ms_fpn
-                if self.max_msda == 'cotr': x_posemb, masks = [], []
                 multi_scale_features = []
                 ms_pixel_feats = ds_feats[:self.max_n_fpn] if self.is_max_ms_fpn else [ds_feats[i] for i in self.max_ms_idxs]
                 
-                for idx, f in enumerate(ms_pixel_feats): # DO FPN(max_n_fpn=4) for {[d/8, h/16, w/16], [d/4, h/8, w/8], [d/2, h/4, w/4], [d, h/2, w/2]}
+                for idx, f in enumerate(ms_pixel_feats): 
 
                     f = self.input_proj[idx](f) # proj into same spatial/channel dim , but transformer_decoder also project to same mask_dim 
-                    if self.max_msda == 'cotr':
-                        x_posemb.append(self.position_embed(f))
-                        masks.append(torch.zeros([len(f)]+f.shape[2:], dtype=torch.bool).cuda())
                     multi_scale_features.append(f)
-
-                if self.max_msda == 'cotr': multi_scale_features = self.encoder_Detrans(multi_scale_features, masks, x_posemb)
-
                 transformer_decoder_in_feature = self.linear_encoder_feature(torch.cat(multi_scale_features, dim=1)) if self.is_max_ms_fpn else multi_scale_features  # feature pyramid
-                # mask_features = self.linear_mask_features(ds_feats[self.max_n_fpn-1]) # TODO: debug!!! not necessary max_n_fpn-1; [2, 192, 16, 48, 48] 
                 mask_features = self.linear_mask_features(ds_feats[-1]) # following SingleScale
-                # assert 1==2, "max_n_fpn {} multi_scale_features {} ds_feats {} transformer_decoder_in_feature {} mask_features {}".format(self.max_n_fpn, [a.shape for a in multi_scale_features], [b.shape for b in ds_feats], transformer_decoder_in_feature.shape if isinstance(transformer_decoder_in_feature, torch.Tensor) else [a.shape for a in transformer_decoder_in_feature], mask_features.shape)
             else:
                 transformer_decoder_in_feature = self.linear_encoder_feature(ds_feats[self.max_ss_idx])
                 mask_features = self.linear_mask_features(ds_feats[-1])
@@ -577,8 +552,6 @@ class Generic_TransUNet_max_ppbp(SegmentationNetwork):
             predictions = self.predictor(transformer_decoder_in_feature, mask_features, mask=None)
 
             if self.is_max_cls and self.is_max_ds:
-                # predictions.keys(): ['pred_logits', 'pred_masks', 'aux_outputs'], 'aux_outputs' is increasing order
-                # predictions['pred_masks'] [B, num_query, D, H, W]
                 if self._deep_supervision and self.do_ds:
                     return [predictions] + [i(j) for i, j in zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])]
                 return predictions
@@ -586,18 +559,13 @@ class Generic_TransUNet_max_ppbp(SegmentationNetwork):
             elif self.is_max_ds and not self.is_max_ms and self.mw==1.0: # aux output of max decoder
                 aux_out = [p['pred_masks'] for p in predictions['aux_outputs']] # ascending order
                 all_out =  [predictions["pred_masks"]] + aux_out[::-1] # reverse order, w/o sigmoid activation
-                # out = torch.mean(torch.stack(all_out, dim=0), 0)
-                # seg_outputs[-1] = self.mw * out + (1.0-self.mw) * seg_outputs[-1]
                 return tuple(all_out)
             elif not self.is_max_ds and self.mw==1.0:
-                # seg_outputs[-1] = self.mw * predictions["pred_masks"] + (1.0-self.mw) * seg_outputs[-1]
-                # return predictions["pred_masks"]
                 raise NotImplementedError
             else:
                 raise NotImplementedError
 
         #############################
-
 
         if self._deep_supervision and self.do_ds: # assuming turn off ds
             return tuple([seg_outputs[-1]] + [i(j) for i, j in zip(list(self.upscale_logits_ops)[::-1], seg_outputs[:-1][::-1])])
@@ -663,12 +631,6 @@ default_dict = {
     "transpose_backward": [0, 1, 2],
     "transpose_forward": [0, 1, 2],
 }
-
-# net = initialize_network().cuda()
-# m = torch.ones((1,1,64,160,160)).cuda()
-# print(net(m).shape)
-
-#############################################################################################################
 
 
 def batch_dice_loss(inputs: torch.Tensor, targets: torch.Tensor):
