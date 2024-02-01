@@ -34,10 +34,6 @@ def get_flops(model, test_data):
     return msg
 
 
-"""
-can also inference for Generic_UNet with:
-python3 -m torch.distributed.launch --master_port=4321 --nproc_per_node=8 run_training_DDP.py --config='./configs/Generic_UNet_DDP_bs2x8_lr0.08.yaml' --fold=0 -val --val_final
-"""
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='', type=str, metavar='FILE',
                     help='YAML config file specifying default arguments')
