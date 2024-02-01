@@ -68,7 +68,7 @@ parser.add_argument("--num_ds", default=None, type=int, help="")
 parser.add_argument("--is_sigmoid", default=False, action="store_true", help="")
 parser.add_argument("--num_examples", type=int, help="")
 
-args, remaining = parser.parse_known_args() # expect return 'remaining' standing for the namspace from launch? but not...
+args, remaining = parser.parse_known_args()
 model_params = {}
 if args.config:
     with open(args.config, 'r') as f:
