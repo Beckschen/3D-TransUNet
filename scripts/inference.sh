@@ -1,8 +1,8 @@
 export nnUNet_N_proc_DA=36
-export nnUNet_codebase="/home/lxh/code/nnUNet" # BUGGGG
+export nnUNet_codebase="../"
 export nnUNet_raw_data_base="/data1/data/nnUNet_raw_data_base/"
 export nnUNet_preprocessed="/data1/data/nnUNet_raw_data_base/nnUNet_preprocessed"
-export RESULTS_FOLDER="/home/meijieru/workspace/transunet_max/results/ablations"
+export RESULTS_FOLDER="/your_dir"
 
 config='configs/Synapse/decoder_only.yaml'
 export save_folder=./results/inference/test/task008/encoderonly

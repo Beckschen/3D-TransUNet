@@ -298,7 +298,7 @@ def predict(arr):
 
 
     if mean is None and std is None:
-        raw_norm = (arr_clip - arr_clip.mean()) / (arr_clip.std()+ 1e-8) D 
+        raw_norm = (arr_clip - arr_clip.mean()) / (arr_clip.std()+ 1e-8)
     else:
         raw_norm = (arr_clip - mean) / std
     
@@ -674,7 +674,7 @@ if not args.save_folder:
 print(args.save_folder)
 os.makedirs(args.save_folder, exist_ok=True)
 
-rawf = sorted(glob(raw_data_dir+"/*.nii.gz")) # sorted(glob("/data/DataSet_all/Multi-Site-NPC/Jinghu/all_nii/MR/*/*.nii.gz"))
+rawf = sorted(glob(raw_data_dir+"/*.nii.gz"))
 if val_keys is not None:
     valid_rawf = [i for i in rawf if os.path.basename(i).replace('.nii.gz', '').replace('_0000', '') in val_keys]
 else:
