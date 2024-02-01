@@ -144,7 +144,6 @@ patch_size = args.crop_size if args.crop_size is not None else patch_size
 
 num_input_channels = plan_data['plans']['num_modalities']
 conv_per_stage = plan_data['plans']['conv_per_stage'] if "conv_per_stage" in plan_data['plans'].keys() else 2
-# what is ['plans']['dataset_properties']['size_reductions'] for brats
 use_mask_for_norm = plan_data['plans']['use_mask_for_norm']
 normalization_schemes = plan_data['plans']['normalization_schemes']
 intensity_properties = plan_data['plans']['dataset_properties']['intensityproperties']
