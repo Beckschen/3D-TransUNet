@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import sys
 
+
 from glob import glob
 from scipy.ndimage.filters import gaussian_filter
 from typing import Tuple
@@ -20,6 +21,7 @@ from batchgenerators.utilities.file_and_folder_operations import *
 from collections import OrderedDict
 from nn_transunet.networks.neural_network import no_op
 from torch.cuda.amp import autocast
+from typing import Union, Tuple, List
 
 
 from nn_transunet.networks.transunet3d_model import InitWeights_He
