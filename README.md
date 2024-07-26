@@ -4,8 +4,17 @@ This is the official repository of our project ["3D TransUNet: Advancing Medical
 
 ## 📰 News
 
-We release the code.
-
+- [7/26/2024] TransUNet, which supports both 2D and 3D data and incorporates a Transformer encoder and decoder, has been featured in the journal Medical Image Analysis ([link](https://www.sciencedirect.com/science/article/pii/S1361841524002056)).
+```bibtex
+@article{chen2024transunet,
+  title={TransUNet: Rethinking the U-Net architecture design for medical image segmentation through the lens of transformers},
+  author={Chen, Jieneng and Mei, Jieru and Li, Xianhang and Lu, Yongyi and Yu, Qihang and Wei, Qingyue and Luo, Xiangde and Xie, Yutong and Adeli, Ehsan and Wang, Yan and others},
+  journal={Medical Image Analysis},
+  pages={103280},
+  year={2024},
+  publisher={Elsevier}
+}
+```
 ## Usage
 
 ### Installation
