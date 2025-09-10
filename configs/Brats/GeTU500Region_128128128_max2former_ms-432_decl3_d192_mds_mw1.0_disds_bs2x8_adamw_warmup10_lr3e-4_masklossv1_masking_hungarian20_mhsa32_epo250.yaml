@@ -1,0 +1,32 @@
+model: Generic_TransUNet_max_ppbp
+model_params:
+  is_masked_attn: True
+  max_dec_layers: 3
+  is_max_bottleneck_transformer: False
+  # vit_depth: 1
+  max_msda: ''
+  is_max_ms: True # num_feature_levels: 3; default fpn downsampled to os244
+  max_ms_idxs: [-4, -3, -2]
+  max_hidden_dim: 192
+  mw: 1.0
+  is_max_ds: True
+  is_masking: True
+  is_max_hungarian: True
+  num_queries: 20
+  is_max_cls: True
+  is_mhsa_float32: True
+
+
+max_loss_cal: 'v1'
+disable_ds: True
+initial_lr: 3e-4
+optim_name: adamw
+lrschedule: warmup_cosine
+resume: ''
+warmup_epochs: 10
+max_num_epochs: 2500 # used 8 cards as default
+task: Task500_BraTS2021
+network: 3d_fullres
+network_trainer: nnUNetTrainerV2_DDP
+hdfs_base: GeTU500Region_128128128_max2former_ms-432_decl3_d192_mds_mw1.0_disds_bs2x8_adamw_warmup10_lr3e-4_masklossv1_masking_hungarian20_mhsa32_epo250
+

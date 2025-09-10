@@ -6,11 +6,13 @@ import SimpleITK as sitk
 
 from medpy import metric
 from tqdm import tqdm
+import pickle
+import json
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', default='', type=str, metavar='FILE', help='YAML config file specifying default arguments')
 parser.add_argument("--eval_mode", default='Val', type=str,)
-parser.add_argument("--fold", default=0, help='0, 1, ..., 5 or \'all\'')
+parser.add_argument("--fold", default=0, help='0, 1, ..., 5 or \'all\'', )
 parser.add_argument("--raw_data_dir", default='')
 parser.add_argument("--pred_dir", default='')
 parser.add_argument("--disable_split", default=False, action="store_true", help='just use raw_data_dir, do not use split!')
@@ -57,6 +59,7 @@ def each_cases_metric(gt, pred, voxel_spacing):
         classes_num = int(classes_num)
 
     class_wise_metric = np.zeros((classes_num-1, 1))
+
     if args.config.find('500Region') != -1:
         regions = {"whole tumor": (1, 2, 3),
                 "tumor core": (2, 3),
@@ -76,7 +79,7 @@ def each_cases_metric(gt, pred, voxel_spacing):
 
 network, task, network_trainer, hdfs_base = cfg['network'], cfg['task'], cfg['network_trainer'], cfg['hdfs_base']
 
-fold_name = args.fold if args.fold.startswith('all') else 'fold_'+str(args.fold)
+fold_name = args.fold if str(args.fold).startswith('all') else 'fold_'+str(args.fold)
 all_results = []
 
 label_dir = os.getenv('nnUNet_preprocessed')+"/"+task+"/gt_segmentations/" # "/home/SENSETIME/luoxiangde.vendor/Projects/ABDSeg/data/ABDSeg/data/labelsTs/"
@@ -99,8 +102,19 @@ if pred_dir.find(',') != -1:
     pred_dirs = pred_dir.split(",")
     print(f'Fusing pred from: {pred_dirs}')
 
+
+if "brats" in task.lower():
+    with open("split/brats_splits_final.pkl", "rb") as f:
+        data = pickle.load(f)
+elif "hepaticvessel" in task.lower():
+    with open("split/hv_splits_final.pkl", "rb") as f:
+        data = pickle.load(f)
+
+eval_files = data[int(args.fold)]['val']
+eval_files = [i+'.nii.gz' for i in eval_files]
+
 r_ind = 0
-for ind, case in enumerate(tqdm(os.listdir(pred_dir if pred_dirs is None else pred_dirs[0]))):
+for ind, case in enumerate(tqdm(eval_files)):
     if not case.endswith(".nii.gz"):
         continue
     gt_path = label_dir+case.replace("_pred", "")

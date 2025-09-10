@@ -25,9 +25,40 @@ See scripts/install.sh for installation. See [nnUNet](https://github.com/MIC-DKF
 
 See scripts/train.sh
 
-### Inference & Eval
+### Inference & Test
 
 See scripts/inference.sh
+
+### 5 fold Eval
+
+See scripts/eval.sh
+
+We provide 5-fold model checkpoints for the Brats and HepaticVessel datasets. These models can be directly downloaded from HuggingFace.
+```
+huggingface-cli download qicq1c/3D-TransUNet --local-dir .
+```
+
+5-fold results for the Brats dataset
+
+| Fold | ncr | ed | et | Avg |
+|------|----------|----------|----------|----------|
+| 1    | 0.9348   | 0.9130   | 0.8590   | 0.9023   |
+| 2    | 0.9327   | 0.9068   | 0.8639   | 0.9011   |
+| 3    | 0.9389   | 0.9245   | 0.8752   | 0.9129   |
+| 4    | 0.9394   | 0.9254   | 0.8773   | 0.9140   |
+| 5    | 0.9418   | 0.9141   | 0.8560   | 0.9040   |
+| **Avg** | **0.9371** | **0.9168** | **0.8663** | **0.9061** |
+
+5-fold results for the HepaticVessel dataset
+
+| Fold | Vessel | Tumour | Avg |
+|------|----------|----------|----------|
+| 1    | 0.6691   | 0.7153   | 0.6922   |
+| 2    | 0.6393   | 0.6899   | 0.6646   |
+| 3    | 0.6215   | 0.7276   | 0.6745   |
+| 4    | 0.6684   | 0.6735   | 0.6710   |
+| 5    | 0.6110   | 0.6745   | 0.6428   |
+| **Avg** | **0.6428** | **0.6966** | **0.6690** |
 
 
 ## Acknowledgements

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import sys
-
+from typing import Union, Tuple, List
 
 from glob import glob
 from scipy.ndimage.filters import gaussian_filter
@@ -21,7 +21,6 @@ from batchgenerators.utilities.file_and_folder_operations import *
 from collections import OrderedDict
 from nn_transunet.networks.neural_network import no_op
 from torch.cuda.amp import autocast
-from typing import Union, Tuple, List
 
 
 from nn_transunet.networks.transunet3d_model import InitWeights_He
@@ -47,6 +46,7 @@ parser.add_argument("--save_npz", default=False, action="store_true")
 parser.add_argument("--disable_split", default=False, action="store_true", help='just use raw_data_dir, do not use split!')
 parser.add_argument("--model_latest", default=False, action="store_true", help='')
 parser.add_argument("--model_final", default=False, action="store_true", help='')
+parser.add_argument("--model_file", default=None, type=str)
 parser.add_argument("--mixed_precision", default=True, type=bool, help='')
 parser.add_argument("--measure_param_flops", default=False, action="store_true", help='')
 
@@ -96,7 +96,7 @@ fold_name = args.fold if isinstance(args.fold, str) and args.fold.startswith('al
 output_folder =  output_folder_name + '/' + fold_name
 plans_path = os.path.join(output_folder_name, 'plans.pkl')
 shutil.copy(plans_file, plans_path)
-
+print('plans_file', plans_file)
 val_keys = None
 if not args.disable_split:
     splits_file = os.path.join(dataset_directory, "splits_final.pkl")
@@ -111,15 +111,19 @@ if not args.disable_split:
 print("output folder for snapshot loading exists: ", output_folder)
 prefix = "version5"
 planfile = plans_path
-if os.path.exists(output_folder + '/' + 'model_best.model') and not args.model_latest and not args.model_final:
-    print("load model_best.model")
-    modelfile = output_folder + '/' + 'model_best.model'
-elif os.path.exists(output_folder + '/' + 'model_final_checkpoint.model') and not args.model_latest:
-    print("load model_final_checkpoint.model")
-    modelfile = output_folder + '/' + 'model_final_checkpoint.model'
+if not args.model_file:
+    if os.path.exists(output_folder + '/' + 'model_best.model') and not args.model_latest and not args.model_final:
+        print("load model_best.model")
+        modelfile = output_folder + '/' + 'model_best.model'
+    elif os.path.exists(output_folder + '/' + 'model_final_checkpoint.model') and not args.model_latest:
+        print("load model_final_checkpoint.model")
+        modelfile = output_folder + '/' + 'model_final_checkpoint.model'
+    else:
+        print("load model_latest.model")
+        modelfile = output_folder + '/' + 'model_latest.model'
 else:
-    print("load model_latest.model")
-    modelfile = output_folder + '/' + 'model_latest.model'
+    print("load model from", args.model_file)
+    modelfile = output_folder + '/' + args.model_file
 
 info = pickle.load(open(planfile, "rb"))
 plan_data = {}
@@ -138,7 +142,8 @@ else:
     num_classes += 1 # add background
 
 base_num_features = plan_data['plans']['base_num_features']
-if '005' in plans_file or  '004' in plans_file or '001' in plans_file or '002' in plans_file : # multiphase task e.g, Brats
+# 解决size mismatch，因为路径里有001出现，导致resolution_index变成0
+if 'Task005' in plans_file or  'Task004' in plans_file or 'Task001' in plans_file or 'Task002' in plans_file or 'Task1006' in plans_file: # multiphase task e.g, Brats
     resolution_index = 0
 
 patch_size = plan_data['plans']['plans_per_stage'][resolution_index]['patch_size']
@@ -422,9 +427,12 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
         # nnunet.training.network_training.nnUNetTrainer -> nnUNetTrainer.preprocess_patient(data_files) # for new unseen data.
         # nnunet.preprocessing.preprocessing -> GenericPreprocessor.preprocess_test_case(data_files, current_spacing) will do ImageCropper.crop_from_list_of_files(data_files) and resample_and_normalize
         # return data, seg, properties
+
         data_files = [] # an element in lists_of_list: [[case0_0000.nii.gz, case0_0001.nii.gz], [case1_0000.nii.gz, case1_0001.nii.gz], ...]
         for i in range(num_input_channels):
-            data_files.append(rawf.replace('0000', '000'+str(i)))
+            # data_files.append(rawf.replace('0000', '000'+str(i)))
+            data_files.append(rawf+'_000'+str(i)+'.nii.gz')
+
 
         from nnunet.preprocessing.cropping import ImageCropper
         from nnunet.preprocessing.preprocessing import GenericPreprocessor
@@ -463,11 +471,12 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
     if save_path is None:
         save_dir = rawf.replace(".nii.gz", "_pred.nii.gz")
     else:
-        uid = rawf.split("/")[-1].replace('_0000', '')
-        for i in range(num_input_channels):
-            uid = uid.replace('_000'+str(i), '')
+        # uid = rawf.split("/")[-1].replace('_0000', '')
+        # for i in range(num_input_channels):
+        #     uid = uid.replace('_000'+str(i), '')
+        uid = rawf.split("/")[-1]+".nii.gz"
         save_dir = os.path.join(save_path, uid)
-
+        # breakpoint()
     if args.save_npz:
         save_npz_dir = save_path.replace("nnUNet_inference", "nnUNet_inference_npz")
         os.makedirs(save_npz_dir, exist_ok=True)
@@ -502,7 +511,7 @@ def Inference3D_multiphase(rawf, save_path=None, mode='nii'):
 
 
 def Inference3D(rawf, save_path=None):
-    arr_raw, sitk_raw = _get_arr(rawf)
+    arr_raw, sitk_raw = _get_arr(rawf+'_0000.nii.gz')
     origin_spacing = sitk_raw.GetSpacing()
     rai_size = sitk_raw.GetSize()
     print("origin_spacing: ", origin_spacing)
@@ -588,6 +597,8 @@ def Inference3D(rawf, save_path=None):
                 _save_path = os.path.join(save_path, 'ds_'+str(idx))
                 os.makedirs(_save_path, exist_ok=True)
                 save_dir = os.path.join(_save_path, uid)
+
+
             if args.save_npz: # added 
                 save_npz_dir = save_path.replace("nnUNet_inference", "nnUNet_inference_npz")
                 save_npz_dir = os.path.join(save_npz_dir, 'ds_'+str(idx))
@@ -644,7 +655,7 @@ def Inference3D(rawf, save_path=None):
     else:
         #change name to msd format
         uid = rawf.split("/")[-1].replace('_0000', '')
-        save_dir = os.path.join(save_path, uid)
+        save_dir = os.path.join(save_path, uid+'.nii.gz')
 
     if args.save_npz:
         save_npz_dir = save_path.replace("nnUNet_inference", "nnUNet_inference_npz")
@@ -671,7 +682,11 @@ if not args.save_folder:
 print(args.save_folder)
 os.makedirs(args.save_folder, exist_ok=True)
 
-rawf = sorted(glob(raw_data_dir+"/*.nii.gz"))
+root_dir = os.getenv('nnUNet_preprocessed')+"/"+task+"/gt_segmentations/"
+base_names = os.listdir(root_dir)
+base_names.sort()
+rawf = [os.path.join(raw_data_dir, i.split('.nii')[0]) for i in base_names if not '._' in i]
+
 if val_keys is not None:
     valid_rawf = [i for i in rawf if os.path.basename(i).replace('.nii.gz', '').replace('_0000', '') in val_keys]
 else:
